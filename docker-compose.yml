@@ -1,0 +1,8 @@
+services:
+  server:
+    image: 'postgres:16'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres # Not for production
+    ports:
+    - '5432:5432'
