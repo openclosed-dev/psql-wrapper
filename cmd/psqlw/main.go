@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	var exitCode = internal.Launch("psql", os.Args[1:])
+	var exitCode = internal.Launch("psqlw", "psql", os.Args[1:])
 	if exitCode != 0 {
 		os.Exit(exitCode)
 	}

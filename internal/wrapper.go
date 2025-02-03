@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -10,29 +11,44 @@ import (
 	"strings"
 )
 
-func Launch(command string, args []string) int {
+type wrapper struct {
+	name   string
+	logger *log.Logger
+}
 
-	env, err := buildEnv(args)
+func Launch(name string, command string, args []string) int {
+
+	var w = wrapper{
+		name:   name,
+		logger: log.New(os.Stderr, name+": ", 0),
+	}
+
+	return w.launch(command, args)
+}
+
+func (w *wrapper) launch(command string, args []string) int {
+
+	env, err := w.buildEnv(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "wrapper: %v\n", err)
+		w.logger.Println(err)
 		return 1
 	}
 
-	exitCode, err := runCommand(command, args, env)
+	exitCode, err := w.runCommand(command, args, env)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "wrapper: %v\n", err)
+		w.logger.Println(err)
 	}
 
 	return exitCode
 }
 
-func buildEnv(args []string) ([]string, error) {
+func (w *wrapper) buildEnv(args []string) ([]string, error) {
 	var env = os.Environ()
-	var username = searchForUsername(args)
+	var username = w.searchForUsername(args)
 	if username == "" {
-		fmt.Fprintf(os.Stderr, "wrapper: Cannot detect username to login\n")
+		w.logger.Printf("Cannot detect username to login")
 	} else {
-		var password, err = retrievePasswordForUser(username)
+		var password, err = w.retrievePasswordForUser(username)
 		if err != nil {
 			return env, err
 		}
@@ -43,7 +59,7 @@ func buildEnv(args []string) ([]string, error) {
 	return env, nil
 }
 
-func runCommand(command string, args []string, env []string) (int, error) {
+func (w *wrapper) runCommand(command string, args []string, env []string) (int, error) {
 
 	var cmd = exec.Command(command, args...)
 
@@ -63,20 +79,12 @@ func runCommand(command string, args []string, env []string) (int, error) {
 	}
 }
 
-func searchForUsername(args []string) string {
-	var username = searchForUsernameInArgs(args)
+func (w *wrapper) searchForUsername(args []string) string {
+	var username = w.searchForUsernameInArgs(args)
 	if username == "" {
 		username = os.Getenv("PGUSER")
 	}
 	return username
-}
-
-func isShortOption(arg string) bool {
-	return strings.HasPrefix(arg, "-")
-}
-
-func isLongOption(arg string) bool {
-	return strings.HasPrefix(arg, "--")
 }
 
 var shortOptionsHavingArg = map[byte]bool{
@@ -111,7 +119,7 @@ var longOptionsHavingArg = map[string]bool{
 	"username":         true,
 }
 
-func searchForUsernameInArgs(args []string) string {
+func (w *wrapper) searchForUsernameInArgs(args []string) string {
 	var username string
 
 	for i := 0; i < len(args); i++ {
@@ -163,7 +171,7 @@ func searchForUsernameInArgs(args []string) string {
 			}
 
 		} else {
-			found := searchForUsernameInNonOptionArg(arg)
+			found := w.searchForUsernameInNonOptionArg(arg)
 			if found != "" {
 				username = found
 			}
@@ -173,24 +181,24 @@ func searchForUsernameInArgs(args []string) string {
 	return username
 }
 
-func searchForUsernameInNonOptionArg(arg string) string {
+func (w *wrapper) searchForUsernameInNonOptionArg(arg string) string {
 	if strings.HasPrefix(arg, "postgresql:") {
-		return searchForUsernameInConnectionURI(arg)
+		return w.searchForUsernameInConnectionURI(arg)
 	} else {
-		return searchForUsernameInConnectionString(arg)
+		return w.searchForUsernameInConnectionString(arg)
 	}
 }
 
-func searchForUsernameInConnectionURI(uri string) string {
+func (w *wrapper) searchForUsernameInConnectionURI(uri string) string {
 	var u, err = url.Parse(uri)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "wrapper: %v\n", err)
+		w.logger.Println(err)
 		return ""
 	}
 	return u.User.Username()
 }
 
-func searchForUsernameInConnectionString(s string) string {
+func (w *wrapper) searchForUsernameInConnectionString(s string) string {
 	var re = regexp.MustCompile(`\s+`)
 	var params = re.Split(s, -1)
 	for _, param := range params {
@@ -202,19 +210,15 @@ func searchForUsernameInConnectionString(s string) string {
 	return ""
 }
 
-func retrievePasswordForUser(username string) (string, error) {
+func (w *wrapper) retrievePasswordForUser(username string) (string, error) {
 	var provider = getPasswordProvider()
 	if provider == "" {
 		return "", errors.New("environment variable PGW_PASSWORD_PROVIDER is undefined")
 	}
-	return invokePasswordProvider(provider, username)
+	return w.invokePasswordProvider(provider, username)
 }
 
-func getPasswordProvider() string {
-	return os.Getenv("PGW_PASSWORD_PROVIDER")
-}
-
-func invokePasswordProvider(provider string, username string) (string, error) {
+func (w *wrapper) invokePasswordProvider(provider string, username string) (string, error) {
 	var cmd = exec.Command(provider, username)
 	var stdout, err = cmd.Output()
 	switch err := err.(type) {
@@ -227,4 +231,16 @@ func invokePasswordProvider(provider string, username string) (string, error) {
 	default:
 		return "", fmt.Errorf("failed to invoke the password provider: %w", err)
 	}
+}
+
+func isShortOption(arg string) bool {
+	return strings.HasPrefix(arg, "-")
+}
+
+func isLongOption(arg string) bool {
+	return strings.HasPrefix(arg, "--")
+}
+
+func getPasswordProvider() string {
+	return os.Getenv("PGW_PASSWORD_PROVIDER")
 }
