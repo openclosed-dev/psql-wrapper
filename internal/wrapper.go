@@ -121,10 +121,11 @@ var longOptionsHavingArg = map[string]bool{
 
 func (w *wrapper) searchForUsernameInArgs(args []string) string {
 	var username string
+	var positional []string
 
 	for i := 0; i < len(args); i++ {
 
-		arg := args[i]
+		var arg string = args[i]
 
 		if isLongOption(arg) {
 
@@ -171,17 +172,31 @@ func (w *wrapper) searchForUsernameInArgs(args []string) string {
 			}
 
 		} else {
-			found := w.searchForUsernameInNonOptionArg(arg)
-			if found != "" {
-				username = found
-			}
+			positional = append(positional, arg)
 		}
+	}
+
+	if found := w.searchForUsernameInPositionalArgs(positional); found != "" {
+		username = found
 	}
 
 	return username
 }
 
-func (w *wrapper) searchForUsernameInNonOptionArg(arg string) string {
+func (w *wrapper) searchForUsernameInPositionalArgs(args []string) string {
+	var len = len(args)
+	switch len {
+	case 1:
+		return w.searchForUsernameInDatabase(args[0])
+	case 2:
+		return args[1]
+	default:
+		w.logger.Printf("Too many positional arguments: %d", len)
+		return ""
+	}
+}
+
+func (w *wrapper) searchForUsernameInDatabase(arg string) string {
 	if strings.HasPrefix(arg, "postgresql:") {
 		return w.searchForUsernameInConnectionURI(arg)
 	} else {
