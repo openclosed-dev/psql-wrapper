@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -14,16 +15,20 @@ import (
 type wrapper struct {
 	name   string
 	logger *log.Logger
+	path   string
 }
+
+const defaultPasswordProvider = "password_provider"
 
 func Launch(name string, command string, args []string) int {
 
 	var w = wrapper{
 		name:   name,
 		logger: log.New(os.Stderr, name+": ", 0),
+		path:   args[0],
 	}
 
-	return w.launch(command, args)
+	return w.launch(command, args[1:])
 }
 
 func (w *wrapper) launch(command string, args []string) int {
@@ -186,6 +191,8 @@ func (w *wrapper) searchForUsernameInArgs(args []string) string {
 func (w *wrapper) searchForUsernameInPositionalArgs(args []string) string {
 	var len = len(args)
 	switch len {
+	case 0:
+		return ""
 	case 1:
 		return w.searchForUsernameInDatabase(args[0])
 	case 2:
@@ -226,7 +233,7 @@ func (w *wrapper) searchForUsernameInConnectionString(s string) string {
 }
 
 func (w *wrapper) retrievePasswordForUser(username string) (string, error) {
-	var provider = getPasswordProvider()
+	var provider = w.getPasswordProvider()
 	if provider == "" {
 		return "", errors.New("environment variable PGW_PASSWORD_PROVIDER is undefined")
 	}
@@ -248,14 +255,21 @@ func (w *wrapper) invokePasswordProvider(provider string, username string) (stri
 	}
 }
 
+func (w *wrapper) getPasswordProvider() string {
+	var provider = os.Getenv("PGW_PASSWORD_PROVIDER")
+	if provider == "" {
+		var path = filepath.Join(filepath.Dir(w.path), defaultPasswordProvider)
+		if _, err := os.Stat(path); err == nil {
+			provider = path
+		}
+	}
+	return provider
+}
+
 func isShortOption(arg string) bool {
 	return strings.HasPrefix(arg, "-")
 }
 
 func isLongOption(arg string) bool {
 	return strings.HasPrefix(arg, "--")
-}
-
-func getPasswordProvider() string {
-	return os.Getenv("PGW_PASSWORD_PROVIDER")
 }
