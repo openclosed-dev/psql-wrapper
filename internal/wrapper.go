@@ -181,26 +181,29 @@ func (w *wrapper) searchArgsForUsername(args []string) string {
 		}
 	}
 
-	if found := w.searchPositionalArgsForUsername(positional); found != "" {
+	if found := w.searchPositionalArgsForUsername(positional, username); found != "" {
 		username = found
 	}
 
 	return username
 }
 
-func (w *wrapper) searchPositionalArgsForUsername(args []string) string {
-	var len = len(args)
-	switch len {
-	case 0:
-		return ""
-	case 1:
-		return w.searchConnectionArgForUsername(args[0])
-	case 2:
-		return args[1]
-	default:
-		w.logger.Printf("Too many positional arguments: %d", len)
-		return ""
+func (w *wrapper) searchPositionalArgsForUsername(args []string, username string) string {
+	var maxArgs = 2
+	if username != "" {
+		maxArgs = 1
 	}
+	for i, arg := range args {
+		switch {
+		case i >= maxArgs:
+			w.logger.Printf("extra command-line argument \"%s\" ignored", arg)
+		case i == 0:
+			username = w.searchConnectionArgForUsername(args[0])
+		case i == 1:
+			username = arg
+		}
+	}
+	return username
 }
 
 func (w *wrapper) searchConnectionArgForUsername(arg string) string {
