@@ -85,7 +85,7 @@ func (w *wrapper) runCommand(command string, args []string, env []string) (int, 
 }
 
 func (w *wrapper) searchForUsername(args []string) string {
-	var username = w.searchForUsernameInArgs(args)
+	var username = w.searchArgsForUsername(args)
 	if username == "" {
 		username = os.Getenv("PGUSER")
 	}
@@ -124,7 +124,7 @@ var longOptionsHavingArg = map[string]bool{
 	"username":         true,
 }
 
-func (w *wrapper) searchForUsernameInArgs(args []string) string {
+func (w *wrapper) searchArgsForUsername(args []string) string {
 	var username string
 	var positional []string
 
@@ -181,20 +181,20 @@ func (w *wrapper) searchForUsernameInArgs(args []string) string {
 		}
 	}
 
-	if found := w.searchForUsernameInPositionalArgs(positional); found != "" {
+	if found := w.searchPositionalArgsForUsername(positional); found != "" {
 		username = found
 	}
 
 	return username
 }
 
-func (w *wrapper) searchForUsernameInPositionalArgs(args []string) string {
+func (w *wrapper) searchPositionalArgsForUsername(args []string) string {
 	var len = len(args)
 	switch len {
 	case 0:
 		return ""
 	case 1:
-		return w.searchForUsernameInDatabase(args[0])
+		return w.searchConnectionArgForUsername(args[0])
 	case 2:
 		return args[1]
 	default:
@@ -203,15 +203,15 @@ func (w *wrapper) searchForUsernameInPositionalArgs(args []string) string {
 	}
 }
 
-func (w *wrapper) searchForUsernameInDatabase(arg string) string {
+func (w *wrapper) searchConnectionArgForUsername(arg string) string {
 	if strings.HasPrefix(arg, "postgresql:") {
-		return w.searchForUsernameInConnectionURI(arg)
+		return w.searchConnectionURIForUsername(arg)
 	} else {
-		return w.searchForUsernameInConnectionString(arg)
+		return w.searchConnectionStringForUsername(arg)
 	}
 }
 
-func (w *wrapper) searchForUsernameInConnectionURI(uri string) string {
+func (w *wrapper) searchConnectionURIForUsername(uri string) string {
 	var u, err = url.Parse(uri)
 	if err != nil {
 		w.logger.Println(err)
@@ -220,7 +220,7 @@ func (w *wrapper) searchForUsernameInConnectionURI(uri string) string {
 	return u.User.Username()
 }
 
-func (w *wrapper) searchForUsernameInConnectionString(s string) string {
+func (w *wrapper) searchConnectionStringForUsername(s string) string {
 	var re = regexp.MustCompile(`\s+`)
 	var params = re.Split(s, -1)
 	for _, param := range params {
